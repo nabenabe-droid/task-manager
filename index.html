@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#7054a0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Task Management">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192x192.png">
+  <title>Task Management</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #root { width: 100%; height: 100%; overflow: hidden; }
+    body { background: #13132a; -webkit-font-smoothing: antialiased; }
+    #root { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+    #splash { position: fixed; inset: 0; background: linear-gradient(135deg, #7054a0, #5a3d8a); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.5s; }
+    #splash.hidden { opacity: 0; pointer-events: none; }
+    #splash img { width: 100px; height: 100px; border-radius: 24px; margin-bottom: 20px; animation: splashPulse 1.5s ease-in-out infinite; }
+    #splash p { color: rgba(255,255,255,0.8); font-family: 'M PLUS Rounded 1c', sans-serif; font-size: 16px; font-weight: 700; }
+    @keyframes splashPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  </style>
+</head>
+<body>
+  <div id="splash"><img src="./icons/icon-192x192.png" alt="Task Management"><p>Task Management</p></div>
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+const { useState, useEffect, useRef, useMemo } = React;
+
+
+// ─── SVG Icons (icooon-mono style, expanded) ───
+const ICON_PATHS = {
+  clipboard: "M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2m1-2h6a1 1 0 011 1v1a1 1 0 01-1 1H9a1 1 0 01-1-1V3a1 1 0 011-1z",
+  briefcase: "M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zM16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2",
+  monitor: "M3 4h18a1 1 0 011 1v11a1 1 0 01-1 1H3a1 1 0 01-1-1V5a1 1 0 011-1zm5 17h8m-4-4v4",
+  phone: "M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.81.37 1.6.7 2.34a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.74.33 1.53.57 2.34.7A2 2 0 0122 16.92z",
+  mail: "M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zm16 2l-8 5-8-5",
+  calendar: "M19 4H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2zM16 2v4M8 2v4M3 10h18",
+  clock: "M12 2a10 10 0 100 20 10 10 0 000-20zm0 5v5l3 3",
+  users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2m22 0v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75M9 11a4 4 0 100-8 4 4 0 000 8z",
+  meeting: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm10 0l2 2-2 2m-4-4l-2 2 2 2",
+  chart: "M18 20V10M12 20V4M6 20v-6",
+  folder: "M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z",
+  edit: "M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z",
+  search: "M11 19a8 8 0 100-16 8 8 0 000 16zm10 2l-4.35-4.35",
+  settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
+  target: "M12 22a10 10 0 100-20 10 10 0 000 20zm0-6a4 4 0 100-8 4 4 0 000 8zm0-2a2 2 0 100-4 2 2 0 000 4z",
+  lightbulb: "M9 21h6m-3-3v3m-4-7a5 5 0 119.9 1A7.5 7.5 0 0114 17.7V18H10v-.3A7.5 7.5 0 018 11z",
+  book: "M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15z",
+  coffee: "M18 8h1a4 4 0 010 8h-1M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8zm4-6v3m4-3v3m4-3v3",
+  utensils: "M3 2v7a4 4 0 004 4v9m-4-9h4m7-11v20m0-20a4 4 0 014 4v1a4 4 0 01-4 4",
+  run: "M13 4a2 2 0 100-4 2 2 0 000 4zM7.5 16.5L10 14l2 2 4-4m-2 6l1 4-3 1m-4-9L6 10l-4 1",
+  yoga: "M12 4a2 2 0 100-4 2 2 0 000 4zm-5 8l5-4 5 4m-10 2l2 8m6-8l2 8m-5-16v8",
+  car: "M5 17h14M7 11l2-5h6l2 5M4 17a1 1 0 01-1-1v-3a1 1 0 011-1h16a1 1 0 011 1v3a1 1 0 01-1 1m-14 0a2 2 0 100-4 2 2 0 000 4zm10 0a2 2 0 100-4 2 2 0 000 4z",
+  bath: "M4 12h16M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7M6 12V5a2 2 0 012-2h1",
+  moon: "M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z",
+  pin: "M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 1118 0zm-9-3a3 3 0 100 6 3 3 0 000-6z",
+  bell: "M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9m-5.27 13a2 2 0 01-3.46 0",
+  tag: "M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01",
+  paperclip: "M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48",
+  printer: "M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z",
+  flask: "M9 3h6m-5 0v6L4 20h16L14 9V3M5 14h14",
+  ruler: "M3 5h18v14H3zm4-1v4m4-4v4m4-4v4",
+  building: "M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 7h1m4 0h1M9 11h1m4 0h1M9 15h1m4 0h1",
+  presentation: "M2 3h20v14H2zm10 14v4m-4 0h8",
+  shopping: "M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zm-3 4h18M16 10a4 4 0 11-8 0",
+  check: "M20 6L9 17l-5-5",
+  star: "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
+  heart: "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 000-7.78z",
+  music: "M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z",
+  camera: "M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2zm-11-3a4 4 0 100-8 4 4 0 000 8z",
+  home: "M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10",
+  plane: "M21 16v-2l-8-5V3.5a1.5 1.5 0 00-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z",
+  cloud: "M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z",
+  gift: "M20 12v10H4V12m16 0H4m16 0l-4-4m-8 4l4-4m0 0V2m0 6a4 4 0 00-4-4m4 4a4 4 0 014-4M2 12h20",
+  smartphone: "M17 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V4a2 2 0 00-2-2zM12 18h.01",
+  wifi: "M5 12.55a11 11 0 0114.08 0M1.42 9a16 16 0 0121.16 0M8.53 16.11a6 6 0 016.95 0M12 20h.01",
+  database: "M12 2C6.48 2 2 3.79 2 6v12c0 2.21 4.48 4 10 4s10-1.79 10-4V6c0-2.21-4.48-4-10-4zM2 6c0 2.21 4.48 4 10 4s10-1.79 10-4M2 12c0 2.21 4.48 4 10 4s10-1.79 10-4",
+  code: "M16 18l6-6-6-6M8 6l-6 6 6 6",
+  terminal: "M4 17l6-6-6-6m8 14h8",
+  lock: "M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4",
+  key: "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  globe: "M12 22a10 10 0 100-20 10 10 0 000 20zM2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z",
+  map: "M1 6v16l7-4 8 4 7-4V2l-7 4-8-4-7 4zm7-4v16m8-12v16",
+  compass: "M12 22a10 10 0 100-20 10 10 0 000 20zM16.24 7.76l-2.12 6.36-6.36 2.12 2.12-6.36 6.36-2.12z",
+  train: "M4 15.5C4 18 6 20 9 20h6c3 0 5-2 5-4.5V5c0-1.66-1.34-3-3-3H7C5.34 2 4 3.34 4 5v10.5zM4 12h16M9 20l-2 3m10-3l2 3M9 6.5h6M9 13h.01M15 13h.01",
+  bicycle: "M5.5 17a3.5 3.5 0 100-7 3.5 3.5 0 000 7zm13 0a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM5.5 13.5L9 7h6l2 3.5M14 13.5l-3-6",
+  umbrella: "M18 19a3 3 0 01-6 0M12 2v1m0 0a9 9 0 019 9H3a9 9 0 019-9zm0 0v17",
+  sun: "M12 17a5 5 0 100-10 5 5 0 000 10zm0-15v2m0 16v2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42",
+  fire: "M12 12c-2-2.67-4-4-4-6a4 4 0 018 0c0 2-2 3.33-4 6zm0 0c1.33 1.78 2 3.33 2 5a2 2 0 01-4 0c0-1.67.67-3.22 2-5z",
+  droplet: "M12 2.69l5.66 5.66a8 8 0 11-11.31 0L12 2.69z",
+  leaf: "M17 8C8 10 5.9 16.17 3.82 21.34l1.89.66L3 22c5.12-4 7.49-7.5 14-10M11 15c3-1.5 5.12-3.5 8-5",
+  headphones: "M3 18v-6a9 9 0 0118 0v6M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zm-18 0a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z",
+  mic: "M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3zM19 10v2a7 7 0 01-14 0v-2m7 9v4m-4 0h8",
+  film: "M19.82 2H4.18A2.18 2.18 0 002 4.18v15.64A2.18 2.18 0 004.18 22h15.64A2.18 2.18 0 0022 19.82V4.18A2.18 2.18 0 0019.82 2zM7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5",
+  tv: "M2 7h20v13H2zM7 2l5 5 5-5",
+  trophy: "M6 9H3V6a1 1 0 011-1h2m12 4h3V6a1 1 0 00-1-1h-2M6 9a6 6 0 006 6m6-6a6 6 0 01-6 6m0 0v3m-4 3h8m-4 0v-3",
+  wallet: "M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h12a2 2 0 012 2v2m-2 4h4v4h-4a2 2 0 010-4z",
+  calculator: "M4 2h16a2 2 0 012 2v16a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2zm2 4h12v4H6zm0 8h2m4 0h2m4 0h2M6 18h2m4 0h2m4 0h2",
+  inbox: "M22 12h-6l-2 3H10l-2-3H2m2-5l2-5h12l2 5M4 7v13a2 2 0 002 2h12a2 2 0 002-2V7",
+  send: "M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z",
+  link: "M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71",
+  download: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m4-5l5 5 5-5m-5 5V3",
+  upload: "M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4m14-7l-5-5-5 5m5-5v12",
+  refresh: "M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15",
+  trash: "M3 6h18m-2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2M10 11v6m4-6v6",
+  archive: "M21 8v13H3V8M1 3h22v5H1zM10 12h4",
+  flag: "M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zm0 7v-7",
+  bookmark: "M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z",
+  eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 9a3 3 0 100 6 3 3 0 000-6z",
+  zap: "M13 2L3 14h9l-1 8 10-12h-9l1-8z",
+  battery: "M17 6H3a2 2 0 00-2 2v8a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2zm6 4v4",
+  tool: "M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z",
+};
+
+const ICON_LIST = [
+  { id: "clipboard", name: "クリップボード" }, { id: "briefcase", name: "ブリーフケース" },
+  { id: "monitor", name: "モニター" }, { id: "phone", name: "電話" },
+  { id: "mail", name: "メール" }, { id: "calendar", name: "カレンダー" },
+  { id: "clock", name: "時計" }, { id: "users", name: "チーム" },
+  { id: "meeting", name: "ミーティング" }, { id: "chart", name: "グラフ" },
+  { id: "folder", name: "フォルダ" }, { id: "edit", name: "編集" },
+  { id: "search", name: "検索" }, { id: "settings", name: "設定" },
+  { id: "target", name: "ターゲット" }, { id: "lightbulb", name: "電球" },
+  { id: "book", name: "本" }, { id: "coffee", name: "コーヒー" },
+  { id: "utensils", name: "食事" }, { id: "run", name: "ランニング" },
+  { id: "yoga", name: "ヨガ" }, { id: "car", name: "車" },
+  { id: "bath", name: "お風呂" }, { id: "moon", name: "月" },
+  { id: "pin", name: "ピン" }, { id: "bell", name: "ベル" },
+  { id: "tag", name: "タグ" }, { id: "paperclip", name: "クリップ" },
+  { id: "printer", name: "プリンター" }, { id: "flask", name: "フラスコ" },
+  { id: "ruler", name: "定規" }, { id: "building", name: "ビル" },
+  { id: "presentation", name: "プレゼン" }, { id: "shopping", name: "買い物" },
+  { id: "check", name: "チェック" }, { id: "star", name: "スター" },
+  { id: "heart", name: "ハート" }, { id: "music", name: "音楽" },
+  { id: "camera", name: "カメラ" }, { id: "home", name: "ホーム" },
+  { id: "plane", name: "飛行機" }, { id: "cloud", name: "クラウド" },
+  { id: "gift", name: "ギフト" }, { id: "smartphone", name: "スマホ" },
+  { id: "wifi", name: "Wi-Fi" }, { id: "database", name: "データベース" },
+  { id: "code", name: "コード" }, { id: "terminal", name: "ターミナル" },
+  { id: "lock", name: "ロック" }, { id: "key", name: "鍵" },
+  { id: "shield", name: "シールド" }, { id: "globe", name: "地球" },
+  { id: "map", name: "マップ" }, { id: "compass", name: "コンパス" },
+  { id: "train", name: "電車" }, { id: "bicycle", name: "自転車" },
+  { id: "umbrella", name: "傘" }, { id: "sun", name: "太陽" },
+  { id: "fire", name: "炎" }, { id: "droplet", name: "水滴" },
+  { id: "leaf", name: "葉っぱ" }, { id: "headphones", name: "ヘッドホン" },
+  { id: "mic", name: "マイク" }, { id: "film", name: "フィルム" },
+  { id: "tv", name: "テレビ" }, { id: "trophy", name: "トロフィー" },
+  { id: "wallet", name: "財布" }, { id: "calculator", name: "電卓" },
+  { id: "inbox", name: "受信箱" }, { id: "send", name: "送信" },
+  { id: "link", name: "リンク" }, { id: "download", name: "ダウンロード" },
+  { id: "upload", name: "アップロード" }, { id: "refresh", name: "更新" },
+  { id: "trash", name: "ゴミ箱" }, { id: "archive", name: "アーカイブ" },
+  { id: "flag", name: "フラグ" }, { id: "bookmark", name: "ブックマーク" },
+  { id: "eye", name: "目" }, { id: "zap", name: "稲妻" },
+  { id: "battery", name: "バッテリー" }, { id: "tool", name: "工具" },
+];
+
+const TaskIcon = ({ iconId, size = 18, color = "#e0e0e0" }) => {
+  const p = ICON_PATHS[iconId];
+  if (!p) return <span style={{ fontSize: size }}>📋</span>;
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={p} /></svg>;
+};
+
+const HOUR_HEIGHT = 160;
+const S = { SCHEDULED: "scheduled", RUNNING: "running", COMPLETED: "completed" };
+const V = { TIMELINE: "timeline", BACKLOG: "backlog" };
+
+const LABELS = [
+  { name: "451/145", color: "#7aabf5", bg: "rgba(122,171,245,0.12)" },
+  { name: "451/146", color: "#6b9cf0", bg: "rgba(107,156,240,0.12)" },
+  { name: "451/146-poc", color: "#5a8de6", bg: "rgba(90,141,230,0.12)" },
+  { name: "451/146-34017", color: "#8fbcfa", bg: "rgba(143,188,250,0.12)" },
+  { name: "451/146-34008", color: "#a8ccfc", bg: "rgba(168,204,252,0.12)" },
+  { name: "133/184", color: "#f5a862", bg: "rgba(245,168,98,0.12)" },
+  { name: "133/184-34008", color: "#f7b97a", bg: "rgba(247,185,122,0.12)" },
+  { name: "133/184-34015", color: "#f09858", bg: "rgba(240,152,88,0.12)" },
+  { name: "試験外のmtg", color: "#e8cc5a", bg: "rgba(232,204,90,0.12)" },
+  { name: "training（試験外）", color: "#f0d96b", bg: "rgba(240,217,107,0.12)" },
+  { name: "社内事務", color: "#d4b44a", bg: "rgba(212,180,74,0.12)" },
+  { name: "経費申請", color: "#f5e07a", bg: "rgba(245,224,122,0.12)" },
+  { name: "ヨガ/筋トレ", color: "#b8a0f0", bg: "rgba(184,160,240,0.12)" },
+  { name: "ランニング", color: "#a48be6", bg: "rgba(164,139,230,0.12)" },
+  { name: "移動", color: "#f0a0c4", bg: "rgba(240,160,196,0.12)" },
+  { name: "ごはん", color: "#e88aae", bg: "rgba(232,138,174,0.12)" },
+  { name: "お風呂", color: "#f5b8d4", bg: "rgba(245,184,212,0.12)" },
+  { name: "読書", color: "#f2a3bf", bg: "rgba(242,163,191,0.12)" },
+];
+
+const ALL_COLORS = [...LABELS.map(l => l.color), "#e88a8a", "#e8a08a", "#d4a87a", "#c8b870", "#8ad4b0", "#8ac4d4", "#8aaad4", "#a0d48a", "#b8d08a", "#d4c48a", "#c49ae0", "#d4a0d0", "#a0b8e8", "#8ab8b0", "#b0c8a0", "#d0b8a0", "#a0a0c8", "#c8a0a0", "#a0c8c0"].filter((c, i, a) => a.indexOf(c) === i);
+
+const genId = () => Math.random().toString(36).slice(2, 10);
+const pad = (n) => String(n).padStart(2, "0");
+const fmtTime = (h, m) => `${pad(h)}:${pad(m)}`;
+const fmtDur = (mins) => { if (mins <= 0) return "0:00"; const h = Math.floor(mins / 60), m = Math.floor(mins % 60); return h > 0 ? `${h}:${pad(m)}` : `0:${pad(m)}`; };
+const dateKey = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDate = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
+const isSameDay = (a, b) => dateKey(a) === dateKey(b);
+const dayN = ["日", "月", "火", "水", "木", "金", "土"];
+
+const SK = "taskflow-v6";
+const loadData = () => { try { return JSON.parse(localStorage.getItem(SK)); } catch { return null; } };
+const saveData = (d) => { try { localStorage.setItem(SK, JSON.stringify(d)); } catch {} };
+const loadP = async () => { try { const r = await window.storage?.get(SK); return r ? JSON.parse(r.value) : null; } catch { return null; } };
+const saveP = async (d) => { try { await window.storage?.set(SK, JSON.stringify(d)); } catch {} };
+const reqNotif = async () => { if (!("Notification" in window)) return false; if (Notification.permission === "granted") return true; return (await Notification.requestPermission()) === "granted"; };
+const sendNotif = (t, b) => { if (Notification.permission === "granted") try { new Notification(t, { body: b }); } catch {} };
+
+function computeColumns(tasks) {
+  if (!tasks.length) return {};
+  const gr = (t) => { if (t.status === S.COMPLETED && t.actualStart && t.actualEnd) { const s = new Date(t.actualStart), e = new Date(t.actualEnd); return { s: s.getHours() * 60 + s.getMinutes(), e: Math.max(s.getHours() * 60 + s.getMinutes() + 15, e.getHours() * 60 + e.getMinutes()) }; } return { s: (t.startHour ?? 0) * 60 + (t.startMin ?? 0), e: (t.startHour ?? 0) * 60 + (t.startMin ?? 0) + t.durationMin }; };
+  const sorted = [...tasks].sort((a, b) => gr(a).s - gr(b).s);
+  const ov = (a, b) => { const ra = gr(a), rb = gr(b); return ra.s < rb.e && rb.s < ra.e; };
+  const cols = new Map(), maxC = new Map();
+  for (let i = 0; i < sorted.length; i++) { const u = new Set(); for (let j = 0; j < i; j++) if (ov(sorted[i], sorted[j])) u.add(cols.get(sorted[j].id)); let c = 0; while (u.has(c)) c++; cols.set(sorted[i].id, c); }
+  const vis = new Set();
+  for (let i = 0; i < sorted.length; i++) { if (vis.has(i)) continue; const g = [i]; vis.add(i); for (let j = i + 1; j < sorted.length; j++) { if (vis.has(j)) continue; for (const gi of g) if (ov(sorted[j], sorted[gi])) { g.push(j); vis.add(j); break; } } const mc = Math.max(...g.map(x => cols.get(sorted[x].id))) + 1; g.forEach(x => maxC.set(sorted[x].id, mc)); }
+  const res = {}; sorted.forEach(t => { res[t.id] = { col: cols.get(t.id), totalCols: maxC.get(t.id) || 1 }; }); return res;
+}
+
+const iS = { width: "100%", boxSizing: "border-box", padding: "14px 18px", background: "#2a2a3e", border: "1px solid #353548", borderRadius: 12, color: "#e0e0e0", fontSize: 20, outline: "none", fontFamily: "'M PLUS Rounded 1c', sans-serif" };
+const lS = { display: "block", color: "#8888a0", fontSize: 16, marginBottom: 8, fontWeight: 600 };
+const bP = { padding: "16px 28px", background: "linear-gradient(135deg, #7a8cf0, #a48be6)", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontSize: 20, fontWeight: 700, fontFamily: "'M PLUS Rounded 1c', sans-serif" };
+const ff = "'M PLUS Rounded 1c', sans-serif";
+
+function Modal({ open, onClose, title, children }) {
+  if (!open) return null;
+  return (<div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(6px)" }} onClick={onClose}><div style={{ background: "#1e1e30", borderRadius: 20, padding: 24, width: "min(440px,92vw)", maxHeight: "85vh", overflowY: "auto", border: "1px solid #2a2a40", boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }} onClick={e => e.stopPropagation()}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}><h2 style={{ margin: 0, fontSize: 24, color: "#e0e0e0", fontWeight: 700 }}>{title}</h2><button onClick={onClose} style={{ background: "none", border: "none", color: "#666", fontSize: 28, cursor: "pointer", width: 32, height: 32, borderRadius: 8 }}>×</button></div>{children}</div></div>);
+}
+
+// ─── Delete Confirmation Modal ───
+function DeleteConfirmModal({ open, onClose, task, onDeleteSingle, onDeleteAll }) {
+  if (!open || !task) return null;
+  const isRepeat = task.repeat || task._repeatSourceId;
+  return (
+    <Modal open={open} onClose={onClose} title="タスクを削除">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+        <TaskIcon iconId={task.icon} size={28} color={task.color} />
+        <span style={{ fontSize: 21, fontWeight: 600, color: "#ddd" }}>{task.title}</span>
+      </div>
+      {isRepeat ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 18, color: "#999", lineHeight: 1.6 }}>
+            このタスクは繰り返し設定されています。どのように削除しますか？
+          </p>
+          <button onClick={onDeleteSingle} style={{ width: "100%", padding: 14, background: "rgba(232,138,138,0.06)", color: "#e88a8a", border: "1px solid rgba(232,138,138,0.18)", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: ff }}>
+            📅 この日のみ削除
+          </button>
+          <button onClick={onDeleteAll} style={{ width: "100%", padding: 14, background: "rgba(232,138,138,0.12)", color: "#e88a8a", border: "1px solid rgba(232,138,138,0.25)", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 700, fontFamily: ff }}>
+            🔁 繰り返しごとすべて削除
+          </button>
+          <button onClick={onClose} style={{ width: "100%", padding: 12, background: "transparent", color: "#888", border: "1px solid #353548", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: ff }}>
+            キャンセル
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <p style={{ margin: 0, fontSize: 18, color: "#999" }}>このタスクを削除してもよろしいですか？</p>
+          <button onClick={onDeleteSingle} style={{ width: "100%", padding: 14, background: "rgba(232,138,138,0.08)", color: "#e88a8a", border: "1px solid rgba(232,138,138,0.18)", borderRadius: 12, cursor: "pointer", fontSize: 18, fontWeight: 600, fontFamily: ff }}>削除する</button>
+          <button onClick={onClose} style={{ width: "100%", padding: 12, background: "transparent", color: "#888", border: "1px solid #353548", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 500, fontFamily: ff }}>キャンセル</button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// ─── Task Detail Modal (with edit button) ───
+function TaskDetailModal({ task, open, onClose, onUpdate, onRequestDelete, onRequestEdit, onStartTask, onStopTask, onDuplicate }) {
+  const [comment, setComment] = useState(""); const [newTodo, setNewTodo] = useState("");
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!task || task.status !== S.RUNNING || !task.actualStart) return;
+    const tick = () => setElapsed((Date.now() - task.actualStart) / 60000);
+    tick(); const iv = setInterval(tick, 1000); return () => clearInterval(iv);
+  }, [task?.status, task?.actualStart]);
+  if (!task || !open) return null;
+  const addComment = () => { if (!comment.trim()) return; onUpdate({ ...task, comments: [...(task.comments || []), { id: genId(), text: comment, time: Date.now() }] }); setComment(""); };
+  const addTodo = () => { if (!newTodo.trim()) return; onUpdate({ ...task, todos: [...(task.todos || []), { id: genId(), text: newTodo, done: false }] }); setNewTodo(""); };
+  const toggleTodo = (tid) => onUpdate({ ...task, todos: (task.todos || []).map(t => t.id === tid ? { ...t, done: !t.done } : t) });
+  const removeTodo = (tid) => onUpdate({ ...task, todos: (task.todos || []).filter(t => t.id !== tid) });
+  const ct = (task.todos || []).filter(t => t.done).length, tt = (task.todos || []).length;
+  const lab = LABELS.find(l => l.name === task.label);
+  const isOvertime = task.status === S.RUNNING && elapsed > task.durationMin;
+  const remaining = task.status === S.RUNNING ? Math.max(0, task.durationMin - elapsed) : 0;
+  return (
+    <Modal open={open} onClose={onClose} title="">
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <TaskIcon iconId={task.icon} size={30} color={task.color} />
+        <span style={{ flex: 1, fontSize: 24, fontWeight: 700, color: "#e0e0e0" }}>{task.title}</span>
+        <button onClick={() => { onClose(); onRequestEdit(task); }} style={{ padding: "6px 14px", borderRadius: 10, border: "1px solid #353548", background: "rgba(122,140,240,0.08)", color: "#7a8cf0", fontSize: 17, fontWeight: 700, cursor: "pointer", fontFamily: ff, display: "flex", alignItems: "center", gap: 6 }}>
+          <TaskIcon iconId="edit" size={18} color="#7a8cf0" /> 編集
+        </button>
+      </div>
+
+      {/* ── Action Button (Start / Stop) ── */}
+      {task.status === S.SCHEDULED && (
+        <button onClick={() => { onStartTask(task); }} style={{ width: "100%", padding: 14, marginBottom: 16, background: `linear-gradient(135deg, ${task.color}, ${task.color}cc)`, color: "#fff", border: "none", borderRadius: 14, cursor: "pointer", fontSize: 21, fontWeight: 800, fontFamily: ff, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, boxShadow: `0 4px 16px ${task.color}44` }}>
+          ▶ タスクを開始する
+        </button>
+      )}
+      {task.status === S.RUNNING && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 10, padding: "10px 0" }}>
+            <div style={{ width: 10, height: 10, borderRadius: 5, background: isOvertime ? "#e88a8a" : "#8ad4b0", animation: "pulse 2s infinite" }} />
+            <span style={{ fontSize: 40, fontWeight: 800, color: isOvertime ? "#e88a8a" : "#ddd", fontFeatureSettings: "'tnum'", letterSpacing: 1 }}>
+              {isOvertime ? `+${fmtDur(elapsed - task.durationMin)}` : fmtDur(remaining)}
+            </span>
+            <span style={{ fontSize: 15, color: "#666", alignSelf: "flex-end", paddingBottom: 4 }}>
+              {isOvertime ? "超過" : "残り"}
+            </span>
+          </div>
+          <div style={{ width: "100%", height: 6, background: "#252540", borderRadius: 3, overflow: "hidden", marginBottom: 12 }}>
+            <div style={{ height: "100%", borderRadius: 3, background: isOvertime ? "linear-gradient(90deg, #e88a8a, #e88a8acc)" : `linear-gradient(90deg, ${task.color}, ${task.color}cc)`, width: `${Math.min(100, (elapsed / task.durationMin) * 100)}%`, transition: "width 1s linear" }} />
+          </div>
+          <button onClick={() => { onStopTask(task); }} style={{ width: "100%", padding: 14, background: "rgba(232,138,138,0.1)", color: "#e88a8a", border: "1px solid rgba(232,138,138,0.25)", borderRadius: 14, cursor: "pointer", fontSize: 21, fontWeight: 800, fontFamily: ff, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+            ⏹ タスクを終了する
+          </button>
+        </div>
+      )}
+      {task.status === S.COMPLETED && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "10px 0", marginBottom: 12, background: "rgba(164,139,230,0.08)", borderRadius: 12 }}>
+          <span style={{ fontSize: 20, color: "#a48be6", fontWeight: 700 }}>✓ 完了済み</span>
+          {task.actualStart && task.actualEnd && (
+            <span style={{ fontSize: 12, color: "#666" }}>
+              （{Math.round((new Date(task.actualEnd) - new Date(task.actualStart)) / 60000)}分）
+            </span>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {task.startHour != null && <span style={{ padding: "6px 14px", borderRadius: 20, fontSize: 15, background: "rgba(255,255,255,0.04)", color: "#888" }}>{fmtTime(task.startHour, task.startMin)} — {task.durationMin}分</span>}
+        {lab && <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, background: lab.bg, color: lab.color, fontWeight: 600 }}>{lab.name}</span>}
+        {task.repeat && <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, background: "rgba(245,168,98,0.12)", color: "#f5a862" }}>🔁 毎日</span>}
+        {task.notify && <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 11, background: "rgba(138,170,212,0.12)", color: "#8aaad4" }}>🔔 通知ON</span>}
+      </div>
+      {task.actualStart && <div style={{ fontSize: 17, color: "#666", marginBottom: 14 }}>実績: {new Date(task.actualStart).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}{task.actualEnd && ` — ${new Date(task.actualEnd).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}`}</div>}
+      <div style={{ marginBottom: 20 }}>
+        <span style={lS}>サブタスク {tt > 0 && `(${ct}/${tt})`}</span>
+        {(task.todos || []).map(todo => (<div key={todo.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderBottom: "1px solid #252540" }}><button onClick={() => toggleTodo(todo.id)} style={{ width: 28, height: 28, borderRadius: 9, border: `2px solid ${todo.done ? task.color : "#3a3a50"}`, background: todo.done ? task.color : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 11, flexShrink: 0 }}>{todo.done ? "✓" : ""}</button><span style={{ flex: 1, fontSize: 18, color: todo.done ? "#555" : "#ccc", textDecoration: todo.done ? "line-through" : "none" }}>{todo.text}</span><button onClick={() => removeTodo(todo.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 15 }}>×</button></div>))}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}><input value={newTodo} onChange={e => setNewTodo(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} placeholder="サブタスクを追加…" style={{ ...iS, flex: 1 }} /><button onClick={addTodo} style={{ ...bP, padding: "8px 16px", fontSize: 12, background: task.color }}>追加</button></div>
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <span style={lS}>コメント</span>
+        {(task.comments || []).map(c => (<div key={c.id} style={{ padding: "8px 12px", background: "#252540", borderRadius: 10, marginBottom: 6, fontSize: 18 }}><div style={{ color: "#ccc" }}>{c.text}</div><div style={{ color: "#555", fontSize: 14, marginTop: 3 }}>{new Date(c.time).toLocaleString("ja-JP")}</div></div>))}
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}><input value={comment} onChange={e => setComment(e.target.value)} onKeyDown={e => e.key === "Enter" && addComment()} placeholder="コメントを追加…" style={{ ...iS, flex: 1 }} /><button onClick={addComment} style={{ ...bP, padding: "8px 16px", fontSize: 12, background: task.color }}>送信</button></div>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => { onDuplicate(task); onClose(); }} style={{ flex: 1, padding: 12, background: "rgba(122,140,240,0.08)", color: "#7a8cf0", border: "1px solid rgba(122,140,240,0.18)", borderRadius: 12, cursor: "pointer", fontSize: 18, fontWeight: 600, fontFamily: ff, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <TaskIcon iconId="clipboard" size={20} color="#7a8cf0" /> 複製
+        </button>
+        <button onClick={() => { onClose(); onRequestDelete(task); }} style={{ flex: 1, padding: 12, background: "rgba(232,138,138,0.08)", color: "#e88a8a", border: "1px solid rgba(232,138,138,0.18)", borderRadius: 12, cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: ff }}>削除</button>
+      </div>
+    </Modal>
+  );
+}
+
+// ─── Task Form Modal ───
+function TaskFormModal({ open, onClose, onSave, editTask, isBacklog }) {
+  const [title, setTitle] = useState(""); const [hasTime, setHasTime] = useState(true);
+  const [startHour, setStartHour] = useState(9); const [startMin, setStartMin] = useState(0);
+  const [durationMin, setDurationMin] = useState(30); const [color, setColor] = useState("#7aabf5");
+  const [icon, setIcon] = useState("clipboard"); const [repeat, setRepeat] = useState(false);
+  const [notify, setNotify] = useState(false); const [label, setLabel] = useState(null);
+  const [iconPage, setIconPage] = useState(0);
+  const [comment, setComment] = useState(""); const [todos, setTodos] = useState([]); const [newTodo, setNewTodo] = useState("");
+  const IPP = 20, tP = Math.ceil(ICON_LIST.length / IPP);
+
+  useEffect(() => {
+    if (editTask) { setTitle(editTask.title); setStartHour(editTask.startHour ?? 9); setStartMin(editTask.startMin ?? 0); setDurationMin(editTask.durationMin); setColor(editTask.color); setIcon(editTask.icon); setRepeat(editTask.repeat || false); setNotify(editTask.notify || false); setLabel(editTask.label || null); setHasTime(editTask.startHour != null); setTodos(editTask.todos || []); setComment(""); }
+    else { setTitle(""); setStartHour(9); setStartMin(0); setDurationMin(30); setColor("#7aabf5"); setIcon("clipboard"); setRepeat(false); setNotify(false); setLabel(null); setHasTime(!isBacklog); setTodos([]); setComment(""); setIconPage(0); }
+  }, [editTask, open, isBacklog]);
+
+  const handleLabelSelect = (l) => { if (label === l.name) setLabel(null); else { setLabel(l.name); setColor(l.color); } };
+  const addTodo = () => { if (!newTodo.trim()) return; setTodos(p => [...p, { id: genId(), text: newTodo, done: false }]); setNewTodo(""); };
+  const removeTodo = (tid) => setTodos(p => p.filter(t => t.id !== tid));
+  const handleSave = () => {
+    if (!title.trim()) return;
+    const comments = editTask ? (editTask.comments || []) : (comment.trim() ? [{ id: genId(), text: comment, time: Date.now() }] : []);
+    onSave({ id: editTask?.id || genId(), title: title.trim(), startHour: hasTime ? startHour : null, startMin: hasTime ? startMin : null, durationMin, color, icon, repeat: hasTime ? repeat : false, notify: hasTime ? notify : false, label, status: editTask?.status || S.SCHEDULED, todos, comments, actualStart: editTask?.actualStart || null, actualEnd: editTask?.actualEnd || null, isBacklog: !hasTime, _repeatSourceId: editTask?._repeatSourceId || null });
+    onClose();
+  };
+  const hours = Array.from({ length: 24 }, (_, i) => i), mins = [0, 15, 30, 45], durs = [15, 30, 45, 60, 90, 120, 180, 240];
+  const iconSlice = ICON_LIST.slice(iconPage * IPP, (iconPage + 1) * IPP);
+  const lG = [
+    { t: "Blue", items: LABELS.filter(l => l.name.startsWith("451")) },
+    { t: "Orange", items: LABELS.filter(l => l.name.startsWith("133")) },
+    { t: "Yellow", items: LABELS.filter(l => ["試験外のmtg","training（試験外）","社内事務","経費申請"].includes(l.name)) },
+    { t: "Purple", items: LABELS.filter(l => ["ヨガ/筋トレ","ランニング"].includes(l.name)) },
+    { t: "Pink", items: LABELS.filter(l => ["移動","ごはん","お風呂","読書"].includes(l.name)) },
+  ];
+  const Toggle = ({ on, fn }) => (<button onClick={fn} style={{ width: 48, height: 28, borderRadius: 14, border: "none", cursor: "pointer", background: on ? "#7a8cf0" : "#3a3a50", position: "relative", flexShrink: 0 }}><div style={{ width: 22, height: 22, borderRadius: 11, background: "#fff", position: "absolute", top: 3, left: on ? 23 : 3, transition: "left 0.3s" }} /></button>);
+
+  return (
+    <Modal open={open} onClose={onClose} title={editTask ? "タスクを編集" : isBacklog ? "ストックタスク作成" : "新しいタスク"}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div><label style={lS}>タスク名</label><input value={title} onChange={e => setTitle(e.target.value)} placeholder="タスク名を入力…" style={iS} autoFocus /></div>
+        <div><label style={lS}>ラベル（任意）</label><div style={{ display: "flex", flexDirection: "column", gap: 8 }}>{lG.map(g => (<div key={g.t}><div style={{ fontSize: 14, color: "#555", marginBottom: 5, fontWeight: 600 }}>{g.t}</div><div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{g.items.map(l => (<button key={l.name} onClick={() => handleLabelSelect(l)} style={{ padding: "4px 10px", borderRadius: 8, fontSize: 15, fontWeight: 600, border: label === l.name ? `2px solid ${l.color}` : "2px solid transparent", background: label === l.name ? l.bg : "#252540", color: label === l.name ? l.color : "#777", cursor: "pointer", fontFamily: ff }}>{l.name}</button>))}</div></div>))}</div></div>
+        {!editTask && (<div style={{ display: "flex", alignItems: "center", gap: 12 }}><Toggle on={hasTime} fn={() => setHasTime(!hasTime)} /><span style={{ color: "#bbb", fontSize: 18 }}>⏰ 時間を指定する</span></div>)}
+        {hasTime && (<div style={{ display: "flex", gap: 12 }}><div style={{ flex: 1 }}><label style={lS}>開始時間</label><div style={{ display: "flex", gap: 6 }}><select value={startHour} onChange={e => setStartHour(+e.target.value)} style={{ ...iS, flex: 1 }}>{hours.map(h => <option key={h} value={h}>{pad(h)}</option>)}</select><span style={{ color: "#555", alignSelf: "center", fontSize: 18 }}>:</span><select value={startMin} onChange={e => setStartMin(+e.target.value)} style={{ ...iS, flex: 1 }}>{mins.map(m => <option key={m} value={m}>{pad(m)}</option>)}</select></div></div><div style={{ flex: 1 }}><label style={lS}>所要時間</label><select value={durationMin} onChange={e => setDurationMin(+e.target.value)} style={iS}>{durs.map(d => <option key={d} value={d}>{fmtDur(d)}</option>)}</select></div></div>)}
+        {!hasTime && (<div><label style={lS}>所要時間</label><select value={durationMin} onChange={e => setDurationMin(+e.target.value)} style={iS}>{durs.map(d => <option key={d} value={d}>{fmtDur(d)}</option>)}</select></div>)}
+        <div><label style={lS}>カラー</label><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{ALL_COLORS.map(c => (<button key={c} onClick={() => { setColor(c); if (label) { const lb = LABELS.find(l => l.name === label); if (lb && lb.color !== c) setLabel(null); } }} style={{ width: 32, height: 32, borderRadius: 10, border: color === c ? "2.5px solid #fff" : "2.5px solid transparent", background: c, cursor: "pointer", transform: color === c ? "scale(1.18)" : "scale(1)", boxShadow: color === c ? `0 0 10px ${c}55` : "none", transition: "all 0.15s" }} />))}</div></div>
+        <div><label style={lS}>アイコン（{iconPage + 1}/{tP}）</label><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{iconSlice.map(ic => (<button key={ic.id} onClick={() => setIcon(ic.id)} title={ic.name} style={{ width: 44, height: 44, borderRadius: 12, border: icon === ic.id ? "2px solid #7a8cf0" : "2px solid transparent", background: icon === ic.id ? "rgba(122,140,240,0.12)" : "#252540", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><TaskIcon iconId={ic.id} size={24} color={icon === ic.id ? "#b0bcf8" : "#777"} /></button>))}</div><div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: "center" }}>{Array.from({ length: tP }, (_, i) => (<button key={i} onClick={() => setIconPage(i)} style={{ width: 34, height: 34, borderRadius: 10, border: "none", background: iconPage === i ? "#7a8cf0" : "#252540", color: iconPage === i ? "#fff" : "#666", cursor: "pointer", fontSize: 15, fontWeight: 700 }}>{i + 1}</button>))}</div></div>
+        {hasTime && (<div style={{ display: "flex", flexDirection: "column", gap: 10 }}><div style={{ display: "flex", alignItems: "center", gap: 12 }}><Toggle on={repeat} fn={() => setRepeat(!repeat)} /><span style={{ color: "#bbb", fontSize: 13 }}>🔁 毎日繰り返し</span></div><div style={{ display: "flex", alignItems: "center", gap: 12 }}><Toggle on={notify} fn={async () => { if (!notify) { const ok = await reqNotif(); if (ok) setNotify(true); } else setNotify(false); }} /><span style={{ color: "#bbb", fontSize: 13 }}>🔔 開始時間に通知</span></div></div>)}
+        <div><label style={lS}>サブタスク（任意）</label>{todos.map(t => (<div key={t.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0" }}><div style={{ width: 18, height: 18, borderRadius: 5, border: "2px solid #3a3a50", flexShrink: 0 }} /><span style={{ flex: 1, fontSize: 13, color: "#ccc" }}>{t.text}</span><button onClick={() => removeTodo(t.id)} style={{ background: "none", border: "none", color: "#444", cursor: "pointer" }}>×</button></div>))}<div style={{ display: "flex", gap: 8 }}><input value={newTodo} onChange={e => setNewTodo(e.target.value)} onKeyDown={e => e.key === "Enter" && addTodo()} placeholder="サブタスクを追加…" style={{ ...iS, flex: 1 }} /><button onClick={addTodo} style={{ ...bP, padding: "8px 14px", fontSize: 12 }}>追加</button></div></div>
+        {!editTask && (<div><label style={lS}>コメント（任意）</label><textarea value={comment} onChange={e => setComment(e.target.value)} placeholder="メモやコメント…" rows={2} style={{ ...iS, resize: "vertical", minHeight: 60 }} /></div>)}
+        <button onClick={handleSave} style={{ ...bP, width: "100%" }}>{editTask ? "更新する" : "作成する"}</button>
+      </div>
+    </Modal>
+  );
+}
+
+function TimelineTask({ task, onOpenDetail, colInfo }) {
+  const [el, setEl] = useState(0);
+  useEffect(() => { if (task.status !== S.RUNNING || !task.actualStart) return; const t = () => setEl((Date.now() - task.actualStart) / 60000); t(); const iv = setInterval(t, 1000); return () => clearInterval(iv); }, [task.status, task.actualStart]);
+  let dT, dH; if (task.status === S.COMPLETED && task.actualStart && task.actualEnd) { const s = new Date(task.actualStart), e = new Date(task.actualEnd); dT = s.getHours() * 60 + s.getMinutes(); dH = Math.max(15, (e - s) / 60000); } else { dT = task.startHour * 60 + task.startMin; dH = task.durationMin; }
+  const top = (dT / 60) * HOUR_HEIGHT, height = Math.max(24, (dH / 60) * HOUR_HEIGHT);
+  const prog = task.status === S.RUNNING ? Math.min(1, el / task.durationMin) : task.status === S.COMPLETED ? 1 : 0;
+  const rem = task.status === S.RUNNING ? Math.max(0, task.durationMin - el) : 0;
+  const ot = task.status === S.RUNNING && el > task.durationMin;
+  const { col = 0, totalCols = 1 } = colInfo || {};
+  const lb = 72, rp = 16;
+  const cW = `calc((100% - ${lb + rp}px) / ${totalCols} - 2px)`, lP = `calc(${lb}px + (100% - ${lb + rp}px) * ${col / totalCols} + 1px)`;
+  const tc = (task.todos || []).length, td = (task.todos || []).filter(t => t.done).length;
+  return (
+    <div onClick={() => onOpenDetail(task)} style={{ position: "absolute", top, left: lP, width: cW, height, minHeight: 24, borderRadius: 12, overflow: "hidden", cursor: "pointer", border: `1px solid ${task.color}28`, background: task.status === S.COMPLETED ? `${task.color}0c` : "#181828", boxShadow: task.status === S.RUNNING ? `0 0 18px ${task.color}28` : "0 2px 6px rgba(0,0,0,0.15)", zIndex: task.status === S.RUNNING ? 10 : 5, boxSizing: "border-box" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: `${prog * 100}%`, background: ot ? `linear-gradient(90deg, ${task.color}28, #e88a8a28)` : `linear-gradient(90deg, ${task.color}28, ${task.color}10)` }} />
+      <div style={{ position: "absolute", top: 0, left: 0, bottom: 0, width: 4, background: task.color, opacity: task.status === S.COMPLETED ? 0.35 : 0.8 }} />
+      <div style={{ position: "relative", padding: "6px 12px 6px 14px", display: "flex", alignItems: "center", gap: 6, height: "100%", boxSizing: "border-box" }}>
+        <TaskIcon iconId={task.icon} size={height > 48 ? 22 : 17} color={task.status === S.COMPLETED ? "#555" : task.color} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: task.status === S.COMPLETED ? "#666" : "#ddd", textDecoration: task.status === S.COMPLETED ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{task.title}</div>
+          {height > 40 && (<div style={{ fontSize: 14, color: "#666", marginTop: 2, display: "flex", gap: 6 }}><span>{task.status === S.RUNNING ? (ot ? `⚠ ${fmtDur(el - task.durationMin)}超過` : `残り ${fmtDur(rem)}`) : task.status === S.COMPLETED ? "✓ 完了" : fmtTime(task.startHour, task.startMin)}</span>{tc > 0 && <span style={{ opacity: 0.6 }}>☑{td}/{tc}</span>}</div>)}
+        </div>
+        {task.status === S.RUNNING && <div style={{ width: 10, height: 10, borderRadius: 5, background: ot ? "#e88a8a" : "#8ad4b0", animation: "pulse 2s infinite", flexShrink: 0 }} />}
+      </div>
+    </div>
+  );
+}
+
+function NowLine({ now }) { const t = ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT; return (<div style={{ position: "absolute", top: t, left: 56, right: 0, zIndex: 20, pointerEvents: "none" }}><div style={{ display: "flex", alignItems: "center" }}><div style={{ width: 14, height: 14, borderRadius: 7, background: "#e88a8a", marginLeft: -5 }} /><div style={{ flex: 1, height: 2, background: "linear-gradient(90deg, #e88a8a, transparent)" }} /></div></div>); }
+
+function BacklogView({ tasks, onStart, onOpenDetail }) {
+  if (!tasks.length) return (<div style={{ textAlign: "center", padding: "60px 20px", color: "#444" }}><div style={{ marginBottom: 12 }}><TaskIcon iconId="folder" size={56} color="#444" /></div><div style={{ fontSize: 21, fontWeight: 700 }}>ストックタスクはありません</div><div style={{ fontSize: 17, marginTop: 8, color: "#555" }}>+ ボタンで時間未指定タスクを追加</div></div>);
+  return (<div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}><div style={{ fontSize: 17, color: "#555", padding: "6px 0", fontWeight: 700 }}>📦 そのうちやる — {tasks.length}件</div>{tasks.map(task => { const lab = LABELS.find(l => l.name === task.label); return (<div key={task.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#1a1a2e", borderRadius: 14, border: `1px solid ${task.color}18` }}><TaskIcon iconId={task.icon} size={20} color={task.color} /><div style={{ flex: 1, cursor: "pointer" }} onClick={() => onOpenDetail(task)}><div style={{ fontSize: 20, fontWeight: 600, color: "#ddd" }}>{task.title}</div><div style={{ fontSize: 15, color: "#666", marginTop: 3, display: "flex", gap: 10 }}><span>{fmtDur(task.durationMin)}</span>{lab && <span style={{ color: lab.color }}>● {lab.name}</span>}{(task.todos || []).length > 0 && <span>☑ {(task.todos || []).filter(t => t.done).length}/{(task.todos || []).length}</span>}</div></div><button onClick={() => onStart(task)} style={{ padding: "8px 16px", borderRadius: 10, border: "none", cursor: "pointer", background: `${task.color}18`, color: task.color, fontSize: 17, fontWeight: 700, fontFamily: ff }}>▶ 開始</button></div>); })}</div>);
+}
+
+window.TaskFlowApp = function App() {
+  const [tasks, setTasks] = useState({}); const [backlog, setBacklog] = useState([]);
+  const [selDate, setSelDate] = useState(new Date()); const [now, setNow] = useState(new Date());
+  const [showForm, setShowForm] = useState(false); const [isBF, setIsBF] = useState(false);
+  const [editTask, setEditTask] = useState(null); const [detailTask, setDetailTask] = useState(null);
+  const [showDetail, setShowDetail] = useState(false); const [view, setView] = useState(V.TIMELINE);
+  const [loaded, setLoaded] = useState(false); const [notified, setNotified] = useState(new Set());
+  const [deleteTarget, setDeleteTarget] = useState(null); const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const tlRef = useRef(null);
+
+  useEffect(() => { (async () => { let d = loadData(); if (!d) d = await loadP(); if (d?.tasks) setTasks(d.tasks); if (d?.backlog) setBacklog(d.backlog); setLoaded(true); })(); }, []);
+  useEffect(() => { if (!loaded) return; const d = { tasks, backlog }; saveData(d); saveP(d); }, [tasks, backlog, loaded]);
+  useEffect(() => { const iv = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(iv); }, []);
+  useEffect(() => { if (tlRef.current && view === V.TIMELINE) tlRef.current.scrollTop = Math.max(0, ((now.getHours() * 60 + now.getMinutes()) / 60) * HOUR_HEIGHT - 200); }, [loaded, view]);
+  useEffect(() => { const dk = dateKey(new Date()), nm = now.getHours() * 60 + now.getMinutes(); (tasks[dk] || []).forEach(t => { if (t.notify && t.status === S.SCHEDULED && t.startHour != null && nm === t.startHour * 60 + t.startMin && !notified.has(t.id)) { sendNotif(`📅 ${t.title}`, `${fmtTime(t.startHour, t.startMin)} — タスクの時間です`); setNotified(p => new Set([...p, t.id])); } }); }, [now, tasks, notified]);
+
+  const dk = dateKey(selDate);
+
+  // ─── Build day's task list ───
+  // Exclusions are stored as: tasks["_excl_YYYY-MM-DD"] = ["sourceId1", "sourceId2", ...]
+  const dayTasks = useMemo(() => {
+    const r = [];
+    const currentDayList = tasks[dk] || [];
+    // Get exclusion list for THIS day only
+    const excludedIds = new Set(tasks[`_excl_${dk}`] || []);
+
+    Object.entries(tasks).forEach(([k, list]) => {
+      if (k.startsWith("_excl_")) return; // skip exclusion keys
+      list.forEach(t => {
+        if (t.startHour == null) return;
+        if (k === dk) {
+          // Concrete task on this day — always show
+          r.push({ ...t, _dateKey: dk });
+        } else if (t.repeat) {
+          // Repeat source from another day — generate virtual instance
+          const sourceDate = parseDate(k);
+          if (sourceDate > selDate) return; // don't show future-origin repeats
+          if (excludedIds.has(t.id)) return; // excluded on this day
+          // Check if a concrete instance already exists for this source
+          const hasConcrete = currentDayList.some(x => x._repeatSourceId === t.id);
+          if (!hasConcrete) {
+            r.push({
+              ...t,
+              id: `${t.id}_${dk}`,  // virtual ID
+              _repeatSourceId: t.id, // link back to source
+              _dateKey: dk,
+              status: S.SCHEDULED,
+              actualStart: null,
+              actualEnd: null,
+            });
+          }
+        }
+      });
+    });
+    return r.sort((a, b) => (a.startHour * 60 + a.startMin) - (b.startHour * 60 + b.startMin));
+  }, [tasks, dk, selDate]);
+
+  const displayTasks = dayTasks; // no extra filtering needed now
+  const colLayout = useMemo(() => computeColumns(displayTasks), [displayTasks]);
+
+  const saveTask = (task) => {
+    if (task.isBacklog || task.startHour == null) { setBacklog(p => { const i = p.findIndex(t => t.id === task.id); if (i >= 0) { const n = [...p]; n[i] = task; return n; } return [...p, task]; }); }
+    else { setTasks(p => { const l = [...(p[dk] || [])]; const i = l.findIndex(t => t.id === task.id); if (i >= 0) l[i] = task; else l.push(task); return { ...p, [dk]: l }; }); }
+  };
+
+  // ─── Delete: this day only ───
+  const deleteSingle = (id) => {
+    const task = displayTasks.find(t => t.id === id) || backlog.find(t => t.id === id);
+    if (!task) return;
+
+    if (task._repeatSourceId) {
+      // Virtual repeat instance → add source ID to this day's exclusion list
+      setTasks(p => {
+        const exclKey = `_excl_${dk}`;
+        const existing = p[exclKey] || [];
+        if (existing.includes(task._repeatSourceId)) return p;
+        return { ...p, [exclKey]: [...existing, task._repeatSourceId] };
+      });
+    } else if (task.isBacklog) {
+      setBacklog(p => p.filter(t => t.id !== id));
+    } else {
+      // Concrete task on this day → remove only from this day's list
+      setTasks(p => {
+        const list = (p[dk] || []).filter(t => t.id !== id);
+        const n = { ...p };
+        if (list.length === 0) delete n[dk]; else n[dk] = list;
+        return n;
+      });
+    }
+  };
+
+  // ─── Delete: entire repeat series ───
+  const deleteAll = (id) => {
+    const task = displayTasks.find(t => t.id === id) || backlog.find(t => t.id === id);
+    const sourceId = task?._repeatSourceId || id;
+    setTasks(p => {
+      const n = { ...p };
+      Object.keys(n).forEach(k => {
+        if (k.startsWith("_excl_")) {
+          // Clean up exclusion lists referencing this source
+          n[k] = n[k].filter(eid => eid !== sourceId);
+          if (n[k].length === 0) delete n[k];
+        } else {
+          n[k] = n[k].filter(t => t.id !== sourceId && t._repeatSourceId !== sourceId);
+          if (n[k].length === 0) delete n[k];
+        }
+      });
+      return n;
+    });
+    setBacklog(p => p.filter(t => t.id !== sourceId));
+  };
+
+  // ─── Duplicate task ───
+  const duplicateTask = (task) => {
+    const newTask = {
+      ...task,
+      id: genId(),
+      title: task.title + "（コピー）",
+      status: S.SCHEDULED,
+      actualStart: null,
+      actualEnd: null,
+      _repeatSourceId: null,
+      _dateKey: dk,
+    };
+    delete newTask._excludedRepeat;
+    if (task.isBacklog || task.startHour == null) {
+      setBacklog(p => [...p, { ...newTask, isBacklog: true }]);
+    } else {
+      setTasks(p => ({ ...p, [dk]: [...(p[dk] || []), newTask] }));
+    }
+    return newTask;
+  };
+
+  const handleOpenDetail = (task) => { setDetailTask(task); setShowDetail(true); };
+  const handleStartTask = (task) => {
+    const u = { ...task, status: S.RUNNING, actualStart: Date.now() };
+    if (task._repeatSourceId) {
+      const newTask = { ...u, id: genId(), _repeatSourceId: task._repeatSourceId };
+      setTasks(p => ({ ...p, [dk]: [...(p[dk] || []), newTask] }));
+      setDetailTask(newTask); // update detail view
+    } else {
+      saveTask(u);
+      setDetailTask(u);
+    }
+  };
+  const handleStopTask = (task) => {
+    const u = { ...task, status: S.COMPLETED, actualEnd: Date.now() };
+    saveTask(u);
+    setDetailTask(u);
+  };
+  const startBacklog = (task) => { const n = new Date(); setBacklog(p => p.filter(t => t.id !== task.id)); setTasks(p => ({ ...p, [dk]: [...(p[dk] || []), { ...task, isBacklog: false, startHour: n.getHours(), startMin: Math.floor(n.getMinutes() / 15) * 15, status: S.RUNNING, actualStart: Date.now() }] })); setView(V.TIMELINE); setSelDate(new Date()); };
+  // ─── Clear repeats for this day only ───
+  const clearRepeats = () => {
+    const repeatSourceIds = displayTasks.filter(t => t._repeatSourceId).map(t => t._repeatSourceId);
+    if (repeatSourceIds.length === 0) return;
+    setTasks(p => {
+      const n = { ...p };
+      // Also remove any concrete repeat instances on this day
+      const dayList = (n[dk] || []).filter(t => !t._repeatSourceId || !repeatSourceIds.includes(t._repeatSourceId));
+      if (dayList.length === 0) delete n[dk]; else n[dk] = dayList;
+      // Add all to this day's exclusion list
+      const exclKey = `_excl_${dk}`;
+      const existing = new Set(n[exclKey] || []);
+      repeatSourceIds.forEach(id => existing.add(id));
+      n[exclKey] = [...existing];
+      return n;
+    });
+  };
+
+  const handleRequestEdit = (task) => { setEditTask(task); setIsBF(task.isBacklog || task.startHour == null); setShowForm(true); };
+  const handleRequestDelete = (task) => { setDeleteTarget(task); setShowDeleteConfirm(true); };
+
+  const isToday = isSameDay(selDate, new Date());
+  const wDates = Array.from({ length: 7 }, (_, i) => { const d = new Date(selDate); d.setDate(d.getDate() - 3 + i); return d; });
+
+
+  return (
+    <div style={{ width: "100%", height: "100vh", background: "#13132a", fontFamily: "'M PLUS Rounded 1c', 'Hiragino Maru Gothic Pro', sans-serif", color: "#e0e0e0", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@300;400;500;700;800&display=swap');@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}*{-webkit-tap-highlight-color:transparent;font-family:'M PLUS Rounded 1c',sans-serif}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#2a2a40;border-radius:2px}select{-webkit-appearance:none;-moz-appearance:none}`}</style>
+
+      <div style={{ padding: "14px 18px 0", background: "#13132a", borderBottom: "1px solid #1e1e35", flexShrink: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <span style={{ fontSize: 28, fontWeight: 800, color: "#eee" }}>{selDate.getFullYear()}年{selDate.getMonth() + 1}月</span>
+          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            {view === V.TIMELINE && displayTasks.some(t => t.repeat || t._repeatSourceId) && (<button onClick={clearRepeats} style={{ padding: "6px 12px", background: "rgba(232,138,138,0.06)", border: "1px solid rgba(232,138,138,0.15)", borderRadius: 10, color: "#e88a8a", fontSize: 15, cursor: "pointer", fontWeight: 600 }}>🗑 繰返クリア</button>)}
+            <button onClick={() => { setEditTask(null); setIsBF(view === V.BACKLOG); setShowForm(true); }} style={{ width: 48, height: 48, borderRadius: 14, background: "linear-gradient(135deg, #7a8cf0, #a48be6)", border: "none", color: "#fff", fontSize: 26, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 15px rgba(122,140,240,0.25)" }}>+</button>
+          </div>
+        </div>
+        {view === V.TIMELINE && (<div style={{ display: "flex", gap: 3, justifyContent: "space-between", paddingBottom: 10 }}>{wDates.map((d, i) => { const ac = isSameDay(d, selDate), td = isSameDay(d, new Date()); return (<button key={i} onClick={() => setSelDate(new Date(d))} style={{ flex: 1, padding: "7px 0", borderRadius: 12, border: "none", background: ac ? "#7a8cf0" : "transparent", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}><span style={{ fontSize: 14, color: ac ? "#fff" : "#555", fontWeight: 600 }}>{dayN[d.getDay()]}</span><span style={{ fontSize: 20, fontWeight: 800, color: ac ? "#fff" : td ? "#7a8cf0" : "#bbb" }}>{d.getDate()}</span></button>); })}</div>)}
+        <div style={{ display: "flex", gap: 0, marginBottom: -1 }}>{[{ k: V.TIMELINE, l: "📅 タイムライン" }, { k: V.BACKLOG, l: `📦 ストック (${backlog.length})` }].map(v => (<button key={v.k} onClick={() => setView(v.k)} style={{ flex: 1, padding: "10px 0", border: "none", cursor: "pointer", background: view === v.k ? "#1a1a30" : "transparent", color: view === v.k ? "#ddd" : "#555", fontSize: 17, fontWeight: 700, borderRadius: "10px 10px 0 0", borderBottom: view === v.k ? "2px solid #7a8cf0" : "2px solid transparent", fontFamily: ff }}>{v.l}</button>))}</div>
+      </div>
+
+      {view === V.TIMELINE && !isToday && (<button onClick={() => setSelDate(new Date())} style={{ margin: "8px 18px 0", padding: "5px 14px", background: "#1e1e35", border: "1px solid #2a2a40", borderRadius: 8, color: "#7a8cf0", fontSize: 15, cursor: "pointer", fontWeight: 700, alignSelf: "flex-start" }}>📍 今日に戻る</button>)}
+
+      {view === V.TIMELINE ? (
+        <div ref={tlRef} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", position: "relative", padding: "8px 0" }}>
+          <div style={{ position: "relative", height: 24 * HOUR_HEIGHT + 40 }}>
+            {Array.from({ length: 24 }, (_, h) => (<div key={h} style={{ position: "absolute", top: h * HOUR_HEIGHT, left: 0, right: 0, display: "flex", alignItems: "flex-start" }}><span style={{ width: 56, textAlign: "right", paddingRight: 12, fontSize: 15, color: "#3a3a55", fontWeight: 600, fontFeatureSettings: "'tnum'" }}>{pad(h)}:00</span><div style={{ flex: 1, borderTop: "1px solid #1a1a30", height: HOUR_HEIGHT }} /></div>))}
+            {isToday && <NowLine now={now} />}
+            {displayTasks.map(t => <TimelineTask key={t.id} task={t} onOpenDetail={handleOpenDetail} colInfo={colLayout[t.id]} />)}
+            {displayTasks.length === 0 && (<div style={{ position: "absolute", top: "40%", left: "50%", transform: "translate(-50%,-50%)", textAlign: "center", color: "#3a3a55" }}><div style={{ marginBottom: 12 }}><TaskIcon iconId="calendar" size={56} color="#3a3a55" /></div><div style={{ fontSize: 21, fontWeight: 700 }}>タスクがありません</div><div style={{ fontSize: 17, marginTop: 8, color: "#444" }}>+ ボタンでタスクを追加</div></div>)}
+          </div>
+        </div>
+      ) : (<div style={{ flex: 1, overflowY: "auto" }}><BacklogView tasks={backlog} onStart={startBacklog} onOpenDetail={handleOpenDetail} /></div>)}
+
+      <div style={{ padding: "10px 18px", background: "#1a1a30", borderTop: "1px solid #1e1e35", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div style={{ fontSize: 15, color: "#4a4a65", fontWeight: 600 }}>{displayTasks.filter(t => t.status === S.COMPLETED).length}/{displayTasks.length} 完了</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#ddd", fontFeatureSettings: "'tnum'" }}>{pad(now.getHours())}:{pad(now.getMinutes())}<span style={{ color: "#3a3a55", fontSize: 14, marginLeft: 4 }}>:{pad(now.getSeconds())}</span></div>
+        <div style={{ fontSize: 11, color: "#4a4a65", fontWeight: 600 }}>{displayTasks.filter(t => t.status === S.RUNNING).length > 0 ? `⏱ ${displayTasks.filter(t => t.status === S.RUNNING).length}件実行中` : "待機中"}</div>
+      </div>
+
+      <TaskFormModal open={showForm} onClose={() => { setShowForm(false); setEditTask(null); }} onSave={saveTask} editTask={editTask} isBacklog={isBF} />
+      <TaskDetailModal task={detailTask} open={showDetail} onClose={() => setShowDetail(false)} onUpdate={(t) => { saveTask(t); setDetailTask(t); }} onRequestDelete={handleRequestDelete} onRequestEdit={handleRequestEdit} onStartTask={handleStartTask} onStopTask={handleStopTask} onDuplicate={duplicateTask} />
+      <DeleteConfirmModal open={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); }} task={deleteTarget}
+        onDeleteSingle={() => { deleteSingle(deleteTarget.id); setShowDeleteConfirm(false); setDeleteTarget(null); }}
+        onDeleteAll={() => { deleteAll(deleteTarget.id); setShowDeleteConfirm(false); setDeleteTarget(null); }}
+      />
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(window.TaskFlowApp));
+setTimeout(() => { const s = document.getElementById('splash'); if (s) { s.classList.add('hidden'); setTimeout(() => s.remove(), 500); } }, 800);
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then(r => console.log('SW:', r.scope)).catch(e => console.log('SW fail:', e));
+      });
+    }
+  </script>
+</body>
+</html>
